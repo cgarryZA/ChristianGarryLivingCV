@@ -21,7 +21,7 @@
       <!-- TOP ROW: GitHub | LinkedIn | Green-Wall -->
       <section class="hero-v3">
         <!-- GitHub -->
-        <article class="profile-card card">
+        <article class="profile-card card link-card" id="gh-card">
           <div class="row-identity">
             <img id="avatar" class="avatar" alt="GitHub avatar" />
             <div class="who">
@@ -44,10 +44,20 @@
             <div id="company"></div>
             <div id="twitter"></div>
           </div>
+
+          <!-- Invisible full-card link -->
+          <a
+            id="gh-url"
+            class="stretched-link"
+            href="#"
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label="Open GitHub profile"
+          ></a>
         </article>
 
         <!-- LinkedIn -->
-        <article class="profile-card card">
+        <article class="profile-card card link-card" id="li-card">
           <div class="row-identity">
             <img id="li-avatar" class="avatar" alt="LinkedIn avatar" />
             <div class="who">
@@ -64,13 +74,15 @@
             <div class="kpi" id="li-posts">Latest post below</div>
           </div>
 
-          <div class="meta">
-            <div>
-              <a id="li-url" href="#" target="_blank" rel="noreferrer noopener"
-                >View profile</a
-              >
-            </div>
-          </div>
+          <!-- Invisible full-card link -->
+          <a
+            id="li-url"
+            class="stretched-link"
+            href="#"
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label="Open LinkedIn profile"
+          ></a>
         </article>
 
         <!-- Green-Wall -->

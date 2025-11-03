@@ -1,13 +1,15 @@
 // ===== CONFIG =====
 const GITHUB_USERNAME = "cgarryZA";
-const LI_JSON_URL = "data/linkedin.json"; // your manual file
+const LI_JSON_URL = "data/linkedin.json"; // manual JSON file
 
 // ---- helpers
 const $ = (s) => document.querySelector(s);
+
 function setText(id, t) {
   const el = document.getElementById(id);
-  if (el) el.textContent = t;
+  if (el != null) el.textContent = t;
 }
+
 function setLinkOrText(id, label, val, href) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -19,6 +21,7 @@ function setLinkOrText(id, label, val, href) {
     ? `${label}: <a href="${href}" target="_blank" rel="noreferrer noopener">${val}</a>`
     : `${label}: ${val}`;
 }
+
 function escapeHtml(s) {
   return String(s).replace(
     /[&<>"']/g,
@@ -28,6 +31,7 @@ function escapeHtml(s) {
       ])
   );
 }
+
 function extractActivityId(url) {
   if (!url) return null;
   const m1 = url.match(/urn:li:activity:(\d+)/i);
@@ -35,6 +39,8 @@ function extractActivityId(url) {
   const m2 = url.match(/activity[-:](\d+)/i);
   return m2 ? m2[1] : null;
 }
+
+const nf = new Intl.NumberFormat();
 
 // ===== GitHub block =====
 async function loadGithub() {
@@ -48,9 +54,9 @@ async function loadGithub() {
   setText("login", "@" + (u.login || GITHUB_USERNAME));
   setText("bio", u.bio || "");
 
-  setText("followers", `${u.followers ?? 0} followers`);
-  setText("following", `${u.following ?? 0} following`);
-  setText("public-repos", `${u.public_repos ?? 0} repos`);
+  setText("followers", `${nf.format(u.followers ?? 0)} followers`);
+  setText("following", `${nf.format(u.following ?? 0)} following`);
+  setText("public-repos", `${nf.format(u.public_repos ?? 0)} repos`);
 
   setLinkOrText("location", "📍 Location", u.location);
   setLinkOrText("company", "🏢 Company", u.company);
@@ -59,7 +65,12 @@ async function loadGithub() {
   if (blog && !/^https?:\/\//i.test(blog)) blog = "https://" + blog;
   setLinkOrText("blog", "🔗 Website", blog, blog);
 
-  // Green-Wall banner (kept)
+  // Set the invisible full-card link to GitHub profile
+  const ghUrl = u.html_url || `https://github.com/${GITHUB_USERNAME}`;
+  const ghA = document.getElementById("gh-url");
+  if (ghA) ghA.href = ghUrl;
+
+  // Green-Wall banner
   const gw = $("#gw");
   if (gw) {
     const qs = new URLSearchParams({ theme: "Classic" });
@@ -88,7 +99,7 @@ async function loadLatestRepo() {
       ? escapeHtml(latest.description)
       : "No description";
   setText("repo-lang", latest.language ? `💻 ${latest.language}` : "");
-  setText("repo-stars", `⭐ ${latest.stargazers_count}`);
+  setText("repo-stars", `⭐ ${nf.format(latest.stargazers_count)}`);
   setText(
     "repo-updated",
     `🕒 Updated ${new Date(latest.pushed_at).toLocaleDateString()}`
@@ -111,7 +122,7 @@ async function loadLinkedIn() {
   }
   const j = await r.json();
 
-  // IMPORTANT: do NOT fall back to GitHub avatar here (you asked to keep them distinct)
+  // avatar (distinct from GitHub)
   if (j.avatar) {
     const liAv = document.getElementById("li-avatar");
     if (liAv) liAv.src = j.avatar;
@@ -124,15 +135,17 @@ async function loadLinkedIn() {
   const profileUrl = j.handle
     ? `https://www.linkedin.com/in/${j.handle}/`
     : j.profile || "#";
-  const liUrl = document.getElementById("li-url");
-  if (liUrl) liUrl.href = profileUrl;
+
+  // Set the invisible full-card link to LinkedIn profile
+  const liA = document.getElementById("li-url");
+  if (liA) liA.href = profileUrl;
 
   if (Number.isFinite(j.followers))
-    setText("li-followers", `${j.followers} followers`);
+    setText("li-followers", `${nf.format(j.followers)} followers`);
   if (Number.isFinite(j.connections))
-    setText("li-connections", `${j.connections} connections`);
+    setText("li-connections", `${nf.format(j.connections)} connections`);
 
-  // Latest post embed (optional if you provide latestPost)
+  // Latest post (optional)
   const postUrl = j.latestPost;
   const fb = document.getElementById("li-fallback");
   if (fb) fb.href = postUrl || profileUrl;
@@ -150,8 +163,10 @@ async function loadLinkedIn() {
   iframe.loading = "lazy";
 
   const container = document.getElementById("li-embed");
-  container.innerHTML = "";
-  container.appendChild(iframe);
+  if (container) {
+    container.innerHTML = "";
+    container.appendChild(iframe);
+  }
 }
 
 // ===== init =====
