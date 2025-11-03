@@ -2,6 +2,14 @@
 const GITHUB_USERNAME = "cgarryZA";
 const LI_JSON_URL = "data/linkedin.json"; // manual JSON file
 
+// CV repo config
+const CV_REPO_OWNER = "cgarryZA";
+const CV_REPO_NAME = "CV";
+const CV_ENTRIES_DIR = "entries";
+const CV_CACHE_URL = "data/cv_cache.json"; // optional one-file cache in this repo
+const CV_LOCAL_CACHE_KEY = "cv_index_cache_v1";
+const CV_LOCAL_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
 // ---- helpers
 const $ = (s) => document.querySelector(s);
 
@@ -145,7 +153,7 @@ async function loadLinkedIn() {
   if (Number.isFinite(j.connections))
     setText("li-connections", `${nf.format(j.connections)} connections`);
 
-  // Latest post (optional)
+  // Latest post (optional, smaller embed)
   const postUrl = j.latestPost;
   const fb = document.getElementById("li-fallback");
   if (fb) fb.href = postUrl || profileUrl;
@@ -153,40 +161,236 @@ async function loadLinkedIn() {
   const actId = extractActivityId(postUrl);
   if (!actId) return;
 
-  // ===== (CHANGED) Build scaled, non-scrolling embed =====
-  const container = document.getElementById("li-embed");
-  if (!container) return;
-
-  // Clear any fallback
-  container.innerHTML = "";
-
-  // Create viewport (fixed visible height, no inner scrollbar)
-  const viewport = document.createElement("div");
-  viewport.className = "li-viewport";
-
-  // Create scaler (uniformly shrink the iframe while keeping full width)
-  const scaler = document.createElement("div");
-  scaler.className = "li-scaler";
-
-  // Official LinkedIn iframe
   const iframe = document.createElement("iframe");
-  iframe.className = "li-iframe";
-  iframe.src = `https://www.linkedin.com/embed/feed/update/urn:li:activity:${actId}`;
-  iframe.loading = "lazy";
+  iframe.src = `https://www.linkedin.com/embed/feed/update/urn:li:activity:${actId}?compact=1`;
+  iframe.width = "100%";
+  iframe.height = "360"; // smaller height
+  iframe.style.border = "0";
+  iframe.style.borderRadius = "12px";
   iframe.allowFullscreen = true;
+  iframe.loading = "lazy";
 
-  scaler.appendChild(iframe);
-  viewport.appendChild(scaler);
-  container.appendChild(viewport);
+  const container = document.getElementById("li-embed");
+  if (container) {
+    container.innerHTML = "";
+    container.appendChild(iframe);
+  }
+}
 
-  // (Optional) small link beneath preview:
-  // const open = document.createElement("a");
-  // open.className = "li-open";
-  // open.href = postUrl;
-  // open.target = "_blank";
-  // open.rel = "noreferrer noopener";
-  // open.textContent = "Open on LinkedIn →";
-  // container.appendChild(open);
+/* ========================
+   LATEST CV ENTRY (from cgarryZA/CV)
+   ======================== */
+
+// simple YAML front-matter parser (first --- block)
+function parseFrontMatter(md) {
+  if (!md.startsWith("---")) return { meta: {}, body: md };
+  const end = md.indexOf("\n---", 3);
+  if (end === -1) return { meta: {}, body: md };
+  const raw = md.slice(3, end).trim();
+  const body = md.slice(end + 4).replace(/^\s*\n/, "");
+  const meta = {};
+  raw.split(/\r?\n/).forEach((line) => {
+    const m = line.match(/^([A-Za-z0-9_.-]+)\s*:\s*(.*)$/);
+    if (m) {
+      const k = m[1].trim();
+      let v = m[2].trim();
+      // strip quotes
+      v = v.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
+      meta[k] = v;
+    }
+  });
+  return { meta, body };
+}
+
+// find first image in markdown
+function extractFirstImage(md, coverFromMeta) {
+  if (coverFromMeta) return coverFromMeta;
+  const m = md.match(/!\[[^\]]*\]\(([^)]+)\)/);
+  return m ? m[1] : null;
+}
+
+// first paragraph snippet (text only)
+function makeSnippet(md) {
+  // remove code blocks for snippet
+  const cleaned = md.replace(/```[\s\S]*?```/g, "").trim();
+  const paras = cleaned
+    .split(/\n{2,}/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const first = paras.find((p) => p.length > 0) || "";
+  // strip markdown links/images emphasis
+  let text = first
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[*_`>#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  // we let CSS clamp lines visually; still cap bytes a bit
+  if (text.length > 600) text = text.slice(0, 600).trim() + "…";
+  return text || "—";
+}
+
+// CDN url for raw file (good CORS)
+function jsDelivrRaw(owner, repo, path, ref = "main") {
+  return `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${ref}/${path}`;
+}
+
+// try load one-file cache from repo
+async function fetchCvCacheJson() {
+  try {
+    const r = await fetch(CV_CACHE_URL, { cache: "no-store" });
+    if (!r.ok) return null;
+    return await r.json(); // { entries: [{path, date, title, url, cover}], updatedAt }
+  } catch {
+    return null;
+  }
+}
+
+// load localStorage cache
+function loadLocalCache() {
+  try {
+    const raw = localStorage.getItem(CV_LOCAL_CACHE_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj.updatedAt) return null;
+    if (Date.now() - obj.updatedAt > CV_LOCAL_CACHE_TTL_MS) return null;
+    return obj;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalCache(obj) {
+  try {
+    localStorage.setItem(CV_LOCAL_CACHE_KEY, JSON.stringify(obj));
+  } catch {}
+}
+
+async function fetchCvEntriesFromApi() {
+  const listUrl = `https://api.github.com/repos/${CV_REPO_OWNER}/${CV_REPO_NAME}/contents/${CV_ENTRIES_DIR}`;
+  const r = await fetch(listUrl);
+  if (!r.ok) throw new Error(`CV list ${r.status}`);
+  const files = await r.json(); // array of {name, path, download_url, ...}
+  // only .md files
+  const mdFiles = files.filter((f) => /\.md$/i.test(f.name));
+  // sort newest by date in filename if present or by name desc
+  mdFiles.sort((a, b) => {
+    const da = a.name.match(/^(\d{4}-\d{2}-\d{2})/);
+    const db = b.name.match(/^(\d{4}-\d{2}-\d{2})/);
+    const ta = da ? new Date(da[1]).getTime() : 0;
+    const tb = db ? new Date(db[1]).getTime() : 0;
+    return tb - ta || b.name.localeCompare(a.name);
+  });
+  // create light index (path/url only); we fetch content only for latest
+  return {
+    entries: mdFiles.map((f) => ({
+      path: f.path,
+      url: jsDelivrRaw(CV_REPO_OWNER, CV_REPO_NAME, f.path),
+    })),
+    updatedAt: Date.now(),
+  };
+}
+
+async function loadLatestCvEntry() {
+  const errorEl = $("#cv-error");
+
+  // 1) try repo one-file cache
+  let idx = await fetchCvCacheJson();
+
+  // 2) else try localStorage cache
+  if (!idx) idx = loadLocalCache();
+
+  // 3) else fetch from GitHub API and remember in localStorage
+  if (!idx) {
+    try {
+      idx = await fetchCvEntriesFromApi();
+      saveLocalCache(idx);
+    } catch (e) {
+      if (errorEl) {
+        errorEl.textContent = "Couldn’t load CV entries right now.";
+        errorEl.style.display = "block";
+      }
+      return;
+    }
+  }
+
+  if (!idx.entries || !idx.entries.length) {
+    if (errorEl) {
+      errorEl.textContent = "No CV entries found yet.";
+      errorEl.style.display = "block";
+    }
+    return;
+  }
+
+  const latest = idx.entries[0];
+  const rawUrl =
+    latest.url || jsDelivrRaw(CV_REPO_OWNER, CV_REPO_NAME, latest.path);
+
+  // fetch the markdown for the latest only
+  const r = await fetch(rawUrl, { cache: "no-store" });
+  if (!r.ok) {
+    if (errorEl) {
+      errorEl.textContent = "Failed to load latest CV entry.";
+      errorEl.style.display = "block";
+    }
+    return;
+  }
+  const md = await r.text();
+  const { meta, body } = parseFrontMatter(md);
+
+  // derive fields
+  const title =
+    meta.title || latest.path.split("/").pop().replace(/\.md$/i, "");
+  const dateStr =
+    meta.date || (latest.path.match(/(\d{4}-\d{2}-\d{2})/)?.[1] ?? "");
+  const cover = extractFirstImage(body, meta.cover);
+  const snippet = makeSnippet(body);
+
+  // populate card
+  const linkEl = $("#cv-latest-link");
+  if (linkEl) {
+    // point to the raw MD file on GitHub (or use a pretty viewer later)
+    const ghUrl = `https://github.com/${CV_REPO_OWNER}/${CV_REPO_NAME}/blob/main/${latest.path}`;
+    linkEl.href = ghUrl;
+  }
+
+  setText("cv-title", title);
+  setText("cv-date", dateStr ? new Date(dateStr).toLocaleDateString() : "");
+
+  const cvImg = $("#cv-cover");
+  if (cvImg) {
+    if (cover) {
+      // resolve relative cover path against the file directory on jsDelivr
+      const base = rawUrl.replace(/\/[^/]*$/, "/");
+      const absolute = /^https?:\/\//i.test(cover)
+        ? cover
+        : base + cover.replace(/^.\//, "");
+      cvImg.src = absolute;
+      cvImg.style.display = "";
+    } else {
+      cvImg.style.display = "none";
+    }
+  }
+
+  setText("cv-snippet", snippet);
+
+  // badges (LinkedIn/GitHub links) if present
+  const badgeWrap = $("#cv-badges");
+  if (badgeWrap) {
+    badgeWrap.innerHTML = "";
+    const mkBadge = (href, label) => {
+      const a = document.createElement("a");
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noreferrer noopener";
+      a.textContent = label;
+      return a;
+    };
+    if (meta["links.linkedin"])
+      badgeWrap.appendChild(mkBadge(meta["links.linkedin"], "LinkedIn"));
+    if (meta["links.github"])
+      badgeWrap.appendChild(mkBadge(meta["links.github"], "GitHub"));
+  }
 }
 
 // ===== init =====
@@ -203,6 +407,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
   try {
     await loadLinkedIn();
+  } catch (e) {
+    console.error(e);
+  }
+  try {
+    await loadLatestCvEntry();
   } catch (e) {
     console.error(e);
   }

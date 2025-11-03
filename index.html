@@ -32,17 +32,17 @@
 
           <p id="bio" class="bio muted">Bio goes here…</p>
 
-          <div class="kpi-row">
-            <div class="kpi" id="followers">0 followers</div>
-            <div class="kpi" id="following">0 following</div>
-            <div class="kpi" id="public-repos">0 repos</div>
-          </div>
-
           <div class="meta">
             <div id="location"></div>
             <div id="blog"></div>
             <div id="company"></div>
             <div id="twitter"></div>
+          </div>
+
+          <div class="kpi-row">
+            <div class="kpi" id="followers">0 followers</div>
+            <div class="kpi" id="following">0 following</div>
+            <div class="kpi" id="public-repos">0 repos</div>
           </div>
 
           <!-- Invisible full-card link -->
@@ -151,6 +151,38 @@
             >View on LinkedIn</a
           >
         </div>
+      </section>
+
+      <!-- Latest CV Entry (from separate CV repo) -->
+      <section class="card cv-latest">
+        <h2 class="section-title">Latest CV Entry</h2>
+
+        <!-- White “paper” card that links to the full entry -->
+        <a
+          id="cv-latest-link"
+          class="paper"
+          href="#"
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          <div class="paper-inner">
+            <div class="paper-media">
+              <img id="cv-cover" class="paper-cover" alt="" />
+            </div>
+            <div class="paper-body">
+              <h3 id="cv-title" class="paper-title">—</h3>
+              <div id="cv-date" class="paper-date muted">—</div>
+              <p id="cv-snippet" class="paper-snippet clamp">—</p>
+              <div id="cv-badges" class="paper-badges"></div>
+            </div>
+          </div>
+        </a>
+
+        <div
+          id="cv-error"
+          class="muted"
+          style="display: none; margin-top: 8px"
+        ></div>
       </section>
     </div>
 
