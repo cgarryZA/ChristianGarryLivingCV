@@ -18,22 +18,24 @@
     </nav>
 
     <div class="wrap">
-      <!-- HERO (profile + activity) -->
-      <section class="card hero">
-        <div class="hero-left">
-          <div class="profile-row">
+      <!-- TOP ROW: GitHub | LinkedIn | Green-Wall -->
+      <section class="hero-v3">
+        <!-- GitHub -->
+        <article class="profile-card card">
+          <div class="row-identity">
             <img id="avatar" class="avatar" alt="GitHub avatar" />
             <div class="who">
               <h1 id="name">Your Name</h1>
               <div class="username" id="login">@username</div>
             </div>
           </div>
+
           <p id="bio" class="bio muted">Bio goes here…</p>
 
-          <div class="kpis">
-            <span id="followers">0 followers</span>
-            <span id="following">0 following</span>
-            <span id="public-repos">0 repos</span>
+          <div class="kpi-row">
+            <div class="kpi" id="followers">0 followers</div>
+            <div class="kpi" id="following">0 following</div>
+            <div class="kpi" id="public-repos">0 repos</div>
           </div>
 
           <div class="meta">
@@ -42,9 +44,37 @@
             <div id="company"></div>
             <div id="twitter"></div>
           </div>
-        </div>
+        </article>
 
-        <div class="hero-right">
+        <!-- LinkedIn -->
+        <article class="profile-card card">
+          <div class="row-identity">
+            <img id="li-avatar" class="avatar" alt="LinkedIn avatar" />
+            <div class="who">
+              <h1 id="li-name">Your Name</h1>
+              <div class="username" id="li-handle">/in/your-handle</div>
+            </div>
+          </div>
+
+          <p id="li-headline" class="bio muted">Headline goes here…</p>
+
+          <div class="kpi-row">
+            <div class="kpi" id="li-followers">— followers</div>
+            <div class="kpi" id="li-connections">— connections</div>
+            <div class="kpi" id="li-posts">Latest post below</div>
+          </div>
+
+          <div class="meta">
+            <div>
+              <a id="li-url" href="#" target="_blank" rel="noreferrer noopener"
+                >View profile</a
+              >
+            </div>
+          </div>
+        </article>
+
+        <!-- Green-Wall -->
+        <article class="greenwall-card card">
           <img
             id="gw"
             class="gw"
@@ -53,13 +83,19 @@
             loading="lazy"
             decoding="async"
           />
-        </div>
+        </article>
       </section>
 
-      <!-- LATEST REPO -->
+      <!-- Latest repo -->
       <section class="card latest">
         <h2 class="section-title">Latest Project</h2>
-        <a id="latest-link" class="repo latest-card" href="#" rel="noreferrer noopener" target="_blank">
+        <a
+          id="latest-link"
+          class="repo latest-card"
+          href="#"
+          rel="noreferrer noopener"
+          target="_blank"
+        >
           <div class="latest-content">
             <div>
               <h3 id="repo-name">Repo Name</h3>
@@ -70,19 +106,38 @@
                 <span id="repo-updated"></span>
               </div>
             </div>
-            <svg class="chev" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-              <path d="M8.5 4.5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <svg
+              class="chev"
+              viewBox="0 0 24 24"
+              width="24"
+              height="24"
+              aria-hidden="true"
+            >
+              <path
+                d="M8.5 4.5l7 7-7 7"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
             </svg>
           </div>
         </a>
       </section>
 
-      <!-- LATEST LINKEDIN -->
+      <!-- Latest on LinkedIn -->
       <section class="card li-card">
         <h2 class="section-title">Latest on LinkedIn</h2>
         <div id="li-embed" class="li-embed">
-          <!-- JS will insert an <iframe>. If that fails, this link shows instead. -->
-          <a id="li-link" class="li-fallback" href="#" target="_blank" rel="noreferrer noopener">View on LinkedIn</a>
+          <a
+            id="li-fallback"
+            class="li-fallback"
+            href="#"
+            target="_blank"
+            rel="noreferrer noopener"
+            >View on LinkedIn</a
+          >
         </div>
       </section>
     </div>

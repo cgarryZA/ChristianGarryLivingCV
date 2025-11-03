@@ -5,9 +5,11 @@
   --text: #e6eef8;
   --accent: #4aa3ff;
   --border: #1e2a3a;
+
+  /* Taller top-row cards so LI headline doesn't crush */
+  --heroH: 280px;
 }
 
-/* Page */
 * {
   box-sizing: border-box;
 }
@@ -18,13 +20,15 @@ body {
   background: var(--bg);
   color: var(--text);
 }
+
+/* wider page, smaller side padding */
 .wrap {
-  max-width: 1280px; /* spreads content wider */
-  margin: 32px auto;
-  padding: 0 20px;
+  max-width: 1760px;
+  margin: 22px auto;
+  padding: 0 10px;
 }
 
-/* Nav */
+/* NAV */
 .nav {
   position: sticky;
   top: 0;
@@ -34,9 +38,9 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .nav-inner {
-  max-width: 1280px;
+  max-width: 1760px;
   margin: 0 auto;
-  padding: 12px 20px;
+  padding: 10px 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -62,102 +66,112 @@ body {
   color: var(--accent);
 }
 
-/* Cards */
 .card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
 }
 
-/* HERO (top banner) */
-.hero {
+/* ===== TOP ROW ===== */
+.hero-v3 {
   display: grid;
-  grid-template-columns: 420px 1fr; /* left profile column + right activity */
-  gap: 24px;
-  align-items: start;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
 }
-@media (max-width: 960px) {
-  .hero {
+@media (max-width: 1200px) {
+  .hero-v3 {
     grid-template-columns: 1fr;
   }
 }
 
-.profile-row {
+/* Profile cards: fixed same height as greenwall */
+.profile-card {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
+  gap: 8px;
+  height: var(--heroH); /* equal height */
+  min-height: var(--heroH);
+}
+.row-identity {
+  display: flex;
+  gap: 12px;
   align-items: center;
 }
 .avatar {
-  width: 100px;
-  height: 100px;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
   border: 2px solid #263244;
   object-fit: cover;
 }
 .who h1 {
-  margin: 0 0 4px 0;
-  font-size: 1.8rem;
+  margin: 0 0 2px 0;
+  font-size: 1.35rem;
 }
 .username {
   color: var(--muted);
   font-size: 0.95rem;
 }
+
 .bio {
-  margin: 12px 0 0 0;
+  margin: 2px 0 6px 0;
 }
 .muted {
   color: var(--muted);
 }
 
-.kpis {
+/* KPI chips horizontal under bio/headline */
+.kpi-row {
   display: flex;
-  gap: 12px;
-  margin-top: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
-.kpis span {
+.kpi {
   background: #0e1523;
   border: 1px solid var(--border);
   padding: 6px 10px;
   border-radius: 999px;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
 }
+
 .meta {
+  margin-top: 2px;
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  margin-top: 12px;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
 }
 
-.hero-right {
-  display: flex;
-  align-items: center;
+/* Green-Wall: MUST fill its card completely with rounded corners */
+.greenwall-card {
+  padding: 0;
+  height: var(--heroH);
+  min-height: var(--heroH);
+  overflow: hidden; /* keep corners */
+  display: block;
 }
 .gw {
   width: 100%;
-  height: auto;
+  height: 100%;
   display: block;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: #0e1523;
+  object-fit: cover; /* fill both dimensions, crop if necessary */
+  border-radius: inherit; /* follow card rounding */
 }
 
-/* Latest repo section */
+/* ===== Latest repo ===== */
 .section-title {
-  margin: 0 0 12px 0;
-  font-size: 1.1rem;
+  margin: 0 0 10px 0;
+  font-size: 1.05rem;
   letter-spacing: 0.2px;
 }
-
 .latest-card {
   display: block;
   border: 1px solid var(--border);
   background: #0e1523;
   border-radius: 12px;
-  padding: 16px;
+  padding: 14px;
   text-decoration: none;
   color: var(--text);
   transition: transform 0.08s ease, border-color 0.08s ease;
@@ -169,19 +183,14 @@ body {
 .latest-content {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-}
-.latest h3,
-.latest .repo h3 {
-  margin: 0 0 6px 0;
-  font-size: 1.05rem;
 }
 .desc {
   margin: 0;
 }
 .badges {
-  margin-top: 8px;
+  margin-top: 6px;
   display: flex;
   gap: 10px;
   color: var(--muted);
@@ -191,8 +200,10 @@ body {
   color: var(--muted);
 }
 
-/* LinkedIn section */
-.li-card .li-embed { position: relative; }
+/* ===== LinkedIn section ===== */
+.li-card .li-embed {
+  position: relative;
+}
 .li-card .li-fallback {
   display: inline-block;
   color: var(--accent);
@@ -202,4 +213,6 @@ body {
   padding: 10px 12px;
   border-radius: 10px;
 }
-.li-card .li-fallback:hover { text-decoration: underline; }
+.li-card .li-fallback:hover {
+  text-decoration: underline;
+}

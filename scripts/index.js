@@ -1,40 +1,49 @@
-// ==== CONFIG ====
+// ===== CONFIG =====
 const GITHUB_USERNAME = "cgarryZA";
+const LI_JSON_URL = "data/linkedin.json"; // your manual file
 
-// For LinkedIn embed, set ONE of these:
-// 1) Preferred: the numeric activity id (from your post URL), e.g. "7222334455667788990"
-const LINKEDIN_ACTIVITY_ID = ""; // <= put id here if you have it
-
-// 2) Or: paste the full public post URL; we'll try to extract the id.
-const LINKEDIN_POST_URL = ""; // e.g. "https://www.linkedin.com/feed/update/urn:li:activity:7222334455667788990/"
-
-// Optional: profile URL used as a fallback link
-const LINKEDIN_PROFILE_URL = "https://www.linkedin.com/in/christian-tt-garry"; // put your /in/… here if you want
-
-// ---- DOM helpers ----
-const $ = (sel) => document.querySelector(sel);
-function setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
+// ---- helpers
+const $ = (s) => document.querySelector(s);
+function setText(id, t) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = t;
+}
 function setLinkOrText(id, label, val, href) {
   const el = document.getElementById(id);
   if (!el) return;
-  if (!val) { el.style.display = "none"; return; }
-  if (href) el.innerHTML = `${label}: <a href="${href}" target="_blank" rel="noreferrer noopener">${val}</a>`;
-  else el.textContent = `${label}: ${val}`;
+  if (!val) {
+    el.style.display = "none";
+    return;
+  }
+  el.innerHTML = href
+    ? `${label}: <a href="${href}" target="_blank" rel="noreferrer noopener">${val}</a>`
+    : `${label}: ${val}`;
 }
 function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (m) =>
-    ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])
+  return String(s).replace(
+    /[&<>"']/g,
+    (m) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[
+        m
+      ])
   );
 }
+function extractActivityId(url) {
+  if (!url) return null;
+  const m1 = url.match(/urn:li:activity:(\d+)/i);
+  if (m1) return m1[1];
+  const m2 = url.match(/activity[-:](\d+)/i);
+  return m2 ? m2[1] : null;
+}
 
-// ==== Profile (REST v3) ====
-async function loadProfile() {
-  const res = await fetch(`https://api.github.com/users/${GITHUB_USERNAME}`);
-  if (!res.ok) throw new Error(`GitHub API error (${res.status})`);
-  const u = await res.json();
+// ===== GitHub block =====
+async function loadGithub() {
+  const r = await fetch(`https://api.github.com/users/${GITHUB_USERNAME}`);
+  if (!r.ok) throw new Error(`GH profile ${r.status}`);
+  const u = await r.json();
 
-  const avatar = document.getElementById("avatar");
-  if (avatar) avatar.src = u.avatar_url || `https://github.com/${GITHUB_USERNAME}.png`;
+  const av = $("#avatar");
+  if (av) av.src = u.avatar_url || `https://github.com/${GITHUB_USERNAME}.png`;
   setText("name", u.name || GITHUB_USERNAME);
   setText("login", "@" + (u.login || GITHUB_USERNAME));
   setText("bio", u.bio || "");
@@ -45,102 +54,121 @@ async function loadProfile() {
 
   setLinkOrText("location", "📍 Location", u.location);
   setLinkOrText("company", "🏢 Company", u.company);
-  setLinkOrText(
-    "twitter", "𝕏 Twitter",
-    u.twitter_username,
-    u.twitter_username ? `https://twitter.com/${u.twitter_username}` : null
-  );
 
   let blog = u.blog;
   if (blog && !/^https?:\/\//i.test(blog)) blog = "https://" + blog;
   setLinkOrText("blog", "🔗 Website", blog, blog);
 
+  // Green-Wall banner (kept)
   const gw = $("#gw");
   if (gw) {
-    const params = new URLSearchParams({ theme: "Classic" });
-    gw.src = `https://green-wall.leoku.dev/api/og/share/${encodeURIComponent(GITHUB_USERNAME)}?${params.toString()}`;
+    const qs = new URLSearchParams({ theme: "Classic" });
+    gw.src = `https://green-wall.leoku.dev/api/og/share/${encodeURIComponent(
+      GITHUB_USERNAME
+    )}?${qs}`;
   }
 }
 
-// ==== Latest Repo (REST v3) ====
+// ===== Latest repo card =====
 async function loadLatestRepo() {
-  const res = await fetch(
+  const r = await fetch(
     `https://api.github.com/users/${GITHUB_USERNAME}/repos?per_page=100&sort=updated`
   );
-  if (!res.ok) return;
-
-  const repos = (await res.json())
-    .filter((r) => !r.fork)
+  if (!r.ok) return;
+  const repos = (await r.json())
+    .filter((x) => !x.fork)
     .sort((a, b) => new Date(b.pushed_at) - new Date(a.pushed_at));
-
   const latest = repos[0];
   if (!latest) return;
 
   setText("repo-name", latest.name);
   const descEl = document.getElementById("repo-desc");
-  if (descEl) descEl.innerHTML = latest.description ? escapeHtml(latest.description) : "No description";
-  const langEl = document.getElementById("repo-lang");
-  if (langEl) langEl.textContent = latest.language ? `💻 ${latest.language}` : "";
-  const starsEl = document.getElementById("repo-stars");
-  if (starsEl) starsEl.textContent = `⭐ ${latest.stargazers_count}`;
-  const updEl = document.getElementById("repo-updated");
-  if (updEl) updEl.textContent = `🕒 Updated ${new Date(latest.pushed_at).toLocaleDateString()}`;
+  if (descEl)
+    descEl.innerHTML = latest.description
+      ? escapeHtml(latest.description)
+      : "No description";
+  setText("repo-lang", latest.language ? `💻 ${latest.language}` : "");
+  setText("repo-stars", `⭐ ${latest.stargazers_count}`);
+  setText(
+    "repo-updated",
+    `🕒 Updated ${new Date(latest.pushed_at).toLocaleDateString()}`
+  );
 
   const link = document.getElementById("latest-link");
   if (link) {
     link.href = latest.html_url;
     link.target = "_blank";
     link.rel = "noreferrer noopener";
-    link.title = `Open ${latest.full_name} on GitHub`;
   }
 }
 
-// ==== LinkedIn embed (no API, just iframe) ====
-function parseActivityIdFromUrl(u) {
-  if (!u) return null;
-  // supports urls like:
-  // - https://www.linkedin.com/feed/update/urn:li:activity:7222334455667788990/
-  // - https://www.linkedin.com/posts/...-activity-7222334455667788990-...
-  const m1 = u.match(/urn:li:activity:(\d+)/i);
-  if (m1) return m1[1];
-  const m2 = u.match(/activity[-:](\d+)/i);
-  if (m2) return m2[1];
-  return null;
-}
-
-function loadLinkedIn() {
-  const container = document.getElementById("li-embed");
-  const fallback = document.getElementById("li-link");
-  if (!container || !fallback) return;
-
-  const id = LINKEDIN_ACTIVITY_ID || parseActivityIdFromUrl(LINKEDIN_POST_URL);
-  const linkHref = LINKEDIN_POST_URL || (LINKEDIN_PROFILE_URL || "#");
-  fallback.href = linkHref;
-
-  if (!id) {
-    // No id found—show link only.
+// ===== LinkedIn from local JSON =====
+async function loadLinkedIn() {
+  const r = await fetch(LI_JSON_URL, { cache: "no-store" });
+  if (!r.ok) {
+    console.warn("[LI] data/linkedin.json not found");
     return;
   }
+  const j = await r.json();
 
-  // Build iframe for the public embed
-  const src = `https://www.linkedin.com/embed/feed/update/urn:li:activity:${id}`;
+  // IMPORTANT: do NOT fall back to GitHub avatar here (you asked to keep them distinct)
+  if (j.avatar) {
+    const liAv = document.getElementById("li-avatar");
+    if (liAv) liAv.src = j.avatar;
+  }
+
+  if (j.name) setText("li-name", j.name);
+  if (j.handle) setText("li-handle", `/in/${j.handle}`);
+  if (j.headline) setText("li-headline", j.headline);
+
+  const profileUrl = j.handle
+    ? `https://www.linkedin.com/in/${j.handle}/`
+    : j.profile || "#";
+  const liUrl = document.getElementById("li-url");
+  if (liUrl) liUrl.href = profileUrl;
+
+  if (Number.isFinite(j.followers))
+    setText("li-followers", `${j.followers} followers`);
+  if (Number.isFinite(j.connections))
+    setText("li-connections", `${j.connections} connections`);
+
+  // Latest post embed (optional if you provide latestPost)
+  const postUrl = j.latestPost;
+  const fb = document.getElementById("li-fallback");
+  if (fb) fb.href = postUrl || profileUrl;
+
+  const actId = extractActivityId(postUrl);
+  if (!actId) return;
+
   const iframe = document.createElement("iframe");
-  iframe.src = src;
+  iframe.src = `https://www.linkedin.com/embed/feed/update/urn:li:activity:${actId}`;
   iframe.width = "100%";
-  iframe.height = "520";           // tweak height if your post is long
+  iframe.height = "520";
   iframe.style.border = "0";
   iframe.style.borderRadius = "12px";
   iframe.allowFullscreen = true;
   iframe.loading = "lazy";
 
-  // Replace fallback link with iframe
+  const container = document.getElementById("li-embed");
   container.innerHTML = "";
   container.appendChild(iframe);
 }
 
-// ==== Init ====
+// ===== init =====
 window.addEventListener("DOMContentLoaded", async () => {
-  try { await loadProfile(); } catch (e) { console.error(e); }
-  try { await loadLatestRepo(); } catch (e) { console.error(e); }
-  loadLinkedIn();
+  try {
+    await loadGithub();
+  } catch (e) {
+    console.error(e);
+  }
+  try {
+    await loadLatestRepo();
+  } catch (e) {
+    console.error(e);
+  }
+  try {
+    await loadLinkedIn();
+  } catch (e) {
+    console.error(e);
+  }
 });
