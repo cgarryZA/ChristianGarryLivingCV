@@ -153,20 +153,40 @@ async function loadLinkedIn() {
   const actId = extractActivityId(postUrl);
   if (!actId) return;
 
-  const iframe = document.createElement("iframe");
-  iframe.src = `https://www.linkedin.com/embed/feed/update/urn:li:activity:${actId}`;
-  iframe.width = "100%";
-  iframe.height = "520";
-  iframe.style.border = "0";
-  iframe.style.borderRadius = "12px";
-  iframe.allowFullscreen = true;
-  iframe.loading = "lazy";
-
+  // ===== (CHANGED) Build scaled, non-scrolling embed =====
   const container = document.getElementById("li-embed");
-  if (container) {
-    container.innerHTML = "";
-    container.appendChild(iframe);
-  }
+  if (!container) return;
+
+  // Clear any fallback
+  container.innerHTML = "";
+
+  // Create viewport (fixed visible height, no inner scrollbar)
+  const viewport = document.createElement("div");
+  viewport.className = "li-viewport";
+
+  // Create scaler (uniformly shrink the iframe while keeping full width)
+  const scaler = document.createElement("div");
+  scaler.className = "li-scaler";
+
+  // Official LinkedIn iframe
+  const iframe = document.createElement("iframe");
+  iframe.className = "li-iframe";
+  iframe.src = `https://www.linkedin.com/embed/feed/update/urn:li:activity:${actId}`;
+  iframe.loading = "lazy";
+  iframe.allowFullscreen = true;
+
+  scaler.appendChild(iframe);
+  viewport.appendChild(scaler);
+  container.appendChild(viewport);
+
+  // (Optional) small link beneath preview:
+  // const open = document.createElement("a");
+  // open.className = "li-open";
+  // open.href = postUrl;
+  // open.target = "_blank";
+  // open.rel = "noreferrer noopener";
+  // open.textContent = "Open on LinkedIn →";
+  // container.appendChild(open);
 }
 
 // ===== init =====
