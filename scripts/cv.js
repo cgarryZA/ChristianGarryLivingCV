@@ -5,7 +5,7 @@ const CV_REPO_OWNER = "cgarryZA";
 const CV_REPO_NAME = "CV";
 const CV_ENTRIES_DIR = "entries";
 const CV_PDF_PATH = "cv.pdf"; // at repo root
-const CV_BRANCH = "main"; // change if you use another branch
+const CV_BRANCH = "main";     // change if you use another branch
 
 // one-file cache (optional, in your site repo)
 const CV_CACHE_URL = "data/cv_cache.json";
@@ -18,7 +18,6 @@ const CV_LOCAL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const $ = (s) => document.querySelector(s);
 
 function jsDelivrRaw(owner, repo, path, ref = "main") {
-  // CORS-friendly CDN for GitHub content
   return `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${ref}/${path}`;
 }
 
@@ -32,13 +31,13 @@ function resolveCoverURL(rawMdUrl, cover) {
   if (!cover) return null;
   let c = normSlashes(cover).replace(/^\.\//, "");
   if (/^https?:\/\//i.test(c)) return c;
-  const baseDir = dirnameFromRaw(rawMdUrl); // .../entries/
-  const root = repoRootFromRaw(rawMdUrl);   // .../@ref/
-  if (c.startsWith("assets/")) return root + c; // repo-root assets
-  return baseDir + c; // entry-relative
+  const baseDir = dirnameFromRaw(rawMdUrl);
+  const root = repoRootFromRaw(rawMdUrl);
+  if (c.startsWith("assets/")) return root + c;  // repo-root asset
+  return baseDir + c;                             // entry-relative asset
 }
 
-// crude front-matter parser (first --- block)
+// --- Front matter (first --- block) ---
 function parseFrontMatter(md) {
   if (!md.startsWith("---")) return { meta: {}, body: md };
   const end = md.indexOf("\n---", 3);
@@ -58,7 +57,7 @@ function parseFrontMatter(md) {
   return { meta, body };
 }
 
-// accept cv: true / yes / 1 OR publish: includes "cv"
+// cv:true OR publish includes "cv"
 function isCvIncluded(meta) {
   const cvFlag = String(meta.cv || "").trim().toLowerCase();
   const truthy = ["1", "true", "yes", "y", "on"];
@@ -70,85 +69,56 @@ function isCvIncluded(meta) {
   return pub.includes("cv");
 }
 
-// month map for 'period' parsing like "Sep 2025 – Present"
-const MONTHS = {
-  jan: 1, january: 1,
-  feb: 2, february: 2,
-  mar: 3, march: 3,
-  apr: 4, april: 4,
-  may: 5,
-  jun: 6, june: 6,
-  jul: 7, july: 7,
-  aug: 8, august: 8,
-  sep: 9, sept: 9, september: 9,
-  oct: 10, october: 10,
-  nov: 11, november: 11,
-  dec: 12, december: 12,
-};
+// --- parse period start for ordering ---
+const MONTHS = {jan:1,january:1,feb:2,february:2,mar:3,march:3,apr:4,april:4,may:5,jun:6,june:6,jul:7,july:7,aug:8,august:8,sep:9,sept:9,september:9,oct:10,october:10,nov:11,november:11,dec:12,december:12};
 function parseFallbackDate(dateStr) {
-  if (!dateStr) return new Date(1900, 0, 1);
-  const fmts = [
-    /^(\d{4})[-\/](\d{2})[-\/](\d{2})$/,
-    /^(\d{4})\/(\d{2})\/(\d{2})$/,
-    /^(\d{4})[-\/](\d{2})$/,
-    /^(\d{4})$/,
-  ];
+  if (!dateStr) return new Date(1900,0,1);
+  const fmts = [/^(\d{4})[-\/](\d{2})[-\/](\d{2})$/, /^(\d{4})\/(\d{2})\/(\d{2})$/, /^(\d{4})[-\/](\d{2})$/, /^(\d{4})$/];
   for (const re of fmts) {
     const m = String(dateStr).match(re);
     if (m) {
-      const y = Number(m[1]);
-      const mo = m[2] ? Number(m[2]) - 1 : 0;
-      const d = m[3] ? Number(m[3]) : 1;
+      const y = +m[1], mo = m[2] ? +m[2]-1 : 0, d = m[3] ? +m[3] : 1;
       return new Date(y, mo, d);
     }
   }
-  return new Date(1900, 0, 1);
+  return new Date(1900,0,1);
 }
 function parsePeriodStart(period, fallbackDate) {
-  if (typeof period !== "string" || !period.trim()) {
-    return parseFallbackDate(fallbackDate);
-  }
-  let s = period.replace(/[—–]/g, "-");
-  const left = s.split("-", 1)[0].trim();
+  if (typeof period !== "string" || !period.trim()) return parseFallbackDate(fallbackDate);
+  const left = period.replace(/[—–]/g, "-").split("-",1)[0].trim();
   const tokens = left.replace(",", " ").split(/\s+/).filter(Boolean);
   if (!tokens.length) return parseFallbackDate(fallbackDate);
-
   if (tokens.length >= 2) {
     const m = tokens[0].toLowerCase();
     const y = tokens.slice(1).find((t) => /^\d{4}$/.test(t));
-    if (MONTHS[m] && y) return new Date(Number(y), MONTHS[m] - 1, 1);
+    if (MONTHS[m] && y) return new Date(+y, MONTHS[m]-1, 1);
   }
-  if (/^\d{4}$/.test(tokens[0])) return new Date(Number(tokens[0]), 0, 1);
+  if (/^\d{4}$/.test(tokens[0])) return new Date(+tokens[0],0,1);
   return parseFallbackDate(fallbackDate);
 }
 
-// --- split into Head / Body from markdown ---
+// --- robust “Head/Body” splitter (regex, not line-walking) ---
+function extractSection(md, name) {
+  const re = new RegExp(
+    String.raw`^\s*###\s*${name}\s*$[\r\n]+([\s\S]*?)(?=^\s*###\s*\w+|\s*$)`,
+    "mi"
+  );
+  const m = md.match(re);
+  return m ? m[1].trim() : "";
+}
 function splitHeadBody(md) {
-  const headMatch = md.match(/^\s*###\s+Head\s*$/m);
-  const bodyMatch = md.match(/^\s*###\s+Body\s*$/m);
-  if (!headMatch && !bodyMatch) {
-    return { headMd: md.trim(), bodyMd: "" }; // if not annotated, treat everything as head for CV view
-  }
-  let headMd = "", bodyMd = "";
-  const lines = md.split(/\r?\n/);
-  let section = null;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (/^\s*###\s+Head\s*$/.test(line)) { section = "head"; continue; }
-    if (/^\s*###\s+Body\s*$/.test(line)) { section = "body"; continue; }
-    if (section === "head") headMd += line + "\n";
-    else if (section === "body") bodyMd += line + "\n";
-  }
-  return { headMd: headMd.trim(), bodyMd: bodyMd.trim() };
+  const headMd = extractSection(md, "Head");
+  const bodyMd = extractSection(md, "Body");
+  if (headMd || bodyMd) return { headMd, bodyMd };
+  // if no markers, treat all as head (CV list shows it)
+  return { headMd: md.trim(), bodyMd: "" };
 }
 
-// remove the "Short CV Snippet (LaTeX)" section entirely (title + code)
+// --- strip helper blocks and code fences ---
 function stripShortCvSnippet(md) {
   const re = /^\s*###\s*Short\s+CV\s+Snippet(?:\s*\(LaTeX\))?\s*[\r\n]+[\s\S]*?(?=^\s*###\s+|\s*$)/gmi;
   return md.replace(re, "").trim();
 }
-
-// strip special blockquote lines we don’t show in the CV list
 function stripSpecialBlockquotes(md) {
   return md
     .replace(/^\s*>\s*_?Cross-?linked\s+to[\s\S]*$/gmi, "")
@@ -156,53 +126,51 @@ function stripSpecialBlockquotes(md) {
     .trim();
 }
 
-// minimal markdown -> HTML renderer (safe-ish)
+// minimal markdown → HTML for the CV page
 function mdToHtml(md) {
   md = stripShortCvSnippet(md);
   md = stripSpecialBlockquotes(md);
 
-  // code fences — remove (including latex blocks)
+  // remove fenced code (incl. ```latex)
   md = md.replace(/```[\s\S]*?```/g, "");
+  // remove lone separator lines like '---'
+  md = md.replace(/^\s*---\s*$/gm, "");
 
-  // images ![alt](src)
-  md = md.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, src) =>
+  // images
+  md = md.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) =>
     `<img alt="${escapeHtml(alt)}" src="${escapeHtml(src)}" />`
   );
-  // links [text](href)
+  // links
   md = md.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    (m, text, href) =>
+    (_, text, href) =>
       `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(text)}</a>`
   );
-  // bold/italic
+  // emphasis
   md = md.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   md = md.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-  // headings ###, ##, #
+  // headings
   md = md.replace(/^\s*###\s+(.+)$/gm, "<h3>$1</h3>");
   md = md.replace(/^\s*##\s+(.+)$/gm, "<h2>$1</h2>");
   md = md.replace(/^\s*#\s+(.+)$/gm, "<h1>$1</h1>");
-  // bullet lists
+  // lists
   md = md.replace(
     /(^|\n)-\s+(.+)(?=(\n-|\n\n|$))/g,
     (m, pfx, item) => `${pfx}<ul><li>${item.trim()}</li></ul>`
   );
-  // paragraphs: split on blank lines
+  // paragraphs
   const parts = md
     .split(/\n{2,}/)
     .map((s) => s.trim())
     .filter(Boolean)
-    .map((block) => {
-      if (/^<(h\d|ul|img)/i.test(block)) return block;
-      return `<p>${block}</p>`;
-    });
+    .map((block) => (/^<(h\d|ul|img)/i.test(block) ? block : `<p>${block}</p>`));
   return parts.join("\n");
 }
 
 function escapeHtml(s) {
-  return String(s).replace(
-    /[&<>"']/g,
-    (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m])
-  );
+  return String(s).replace(/[&<>"']/g, (m) => (
+    { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]
+  ));
 }
 
 /* =========================
@@ -212,7 +180,6 @@ function initPdfView() {
   const frame = $("#cv-frame");
   const rawLink = $("#cv-raw-link");
   if (!frame) return;
-
   const pdfUrl = jsDelivrRaw(CV_REPO_OWNER, CV_REPO_NAME, CV_PDF_PATH, CV_BRANCH);
   const viewerParams = "#toolbar=0&navpanes=0&scrollbar=0&zoom=page-width";
   frame.src = pdfUrl + viewerParams;
@@ -222,16 +189,12 @@ function initPdfView() {
 /* =========================
    BLOG VIEW (CV list)
    ========================= */
-
-// try repo-side one-file cache
 async function fetchCvCacheJson() {
   try {
     const r = await fetch(CV_CACHE_URL, { cache: "no-store" });
     if (!r.ok) return null;
-    return await r.json(); // { entries: [{path, url}], updatedAt }
-  } catch {
-    return null;
-  }
+    return await r.json();
+  } catch { return null; }
 }
 function loadLocalCache() {
   try {
@@ -243,16 +206,13 @@ function loadLocalCache() {
     return obj;
   } catch { return null; }
 }
-function saveLocalCache(obj) {
-  try { localStorage.setItem(CV_LOCAL_CACHE_KEY, JSON.stringify(obj)); } catch {}
-}
+function saveLocalCache(obj) { try { localStorage.setItem(CV_LOCAL_CACHE_KEY, JSON.stringify(obj)); } catch {} }
 async function fetchCvEntriesFromApi() {
   const listUrl = `https://api.github.com/repos/${CV_REPO_OWNER}/${CV_REPO_NAME}/contents/${CV_ENTRIES_DIR}`;
   const r = await fetch(listUrl);
   if (!r.ok) throw new Error(`CV list ${r.status}`);
   const files = await r.json();
   const mdFiles = files.filter((f) => /\.md$/i.test(f.name));
-  // coarse pre-order: filename date if present
   mdFiles.sort((a, b) => {
     const da = a.name.match(/^(\d{4}-\d{2}-\d{2})/);
     const db = b.name.match(/^(\d{4}-\d{2}-\d{2})/);
@@ -284,13 +244,9 @@ async function buildBlogCards() {
   if (!wrap) return;
   wrap.innerHTML = "";
 
-  // 1) caches
   let idx = await fetchCvCacheJson();
   if (!idx) idx = loadLocalCache();
-  if (!idx) {
-    idx = await fetchCvEntriesFromApi();
-    saveLocalCache(idx);
-  }
+  if (!idx) { idx = await fetchCvEntriesFromApi(); saveLocalCache(idx); }
 
   const entries = idx.entries || [];
   if (!entries.length) {
@@ -298,7 +254,7 @@ async function buildBlogCards() {
     return;
   }
 
-  // 2) fetch all, filter to cv:true, compute sort key by period
+  // collect items, sorted by period start
   const items = [];
   for (const e of entries) {
     const r = await fetch(e.url, { cache: "no-store" });
@@ -307,38 +263,37 @@ async function buildBlogCards() {
     const { meta, body } = parseFrontMatter(md);
     if (!isCvIncluded(meta)) continue;
 
-    // cover image
+    const { headMd } = splitHeadBody(body);        // <<— HEAD ONLY
+    const headHtml = mdToHtml(headMd || "");
+
     const coverRel = meta.cover || (body.match(/!\[[^\]]*\]\(([^)]+)\)/)?.[1] ?? "");
     const coverAbs = coverRel ? resolveCoverURL(e.url, coverRel) : null;
 
-    // only render HEAD content on CV page
-    const { headMd } = splitHeadBody(body);
-    const headHtml = mdToHtml(headMd || ""); // empty is fine
-
-    const ghUrl = `https://github.com/${CV_REPO_OWNER}/${CV_REPO_NAME}/blob/${CV_BRANCH}/${e.path}`;
+    // link to entry page (use stable id; fall back to path)
+    const entryId = (meta.id && String(meta.id).trim()) || e.path.replace(/^entries\//, "").replace(/\.md$/i, "");
+    const entryUrl = `entry.html?id=${encodeURIComponent(entryId)}`;
 
     items.push({
       title: meta.title || "Untitled",
-      dateText: meta.period || "",                // display period
-      sortDate: parsePeriodStart(meta.period, meta.date), // sort by period
-      ghUrl,
+      dateText: meta.period || "",
+      sortDate: parsePeriodStart(meta.period, meta.date),
       coverAbs,
-      headHtml,                                   // ONLY head content
+      headHtml,
+      entryUrl, // clickable
+      ghUrl: `https://github.com/${CV_REPO_OWNER}/${CV_REPO_NAME}/blob/${CV_BRANCH}/${e.path}`,
     });
   }
 
-  // 3) sort DESC by period start
   items.sort((a, b) => b.sortDate - a.sortDate);
 
-  // 4) render (one per row; small cover top-left)
   for (const it of items) {
     const card = document.createElement("article");
     card.className = "paper blog-card";
+    card.style.position = "relative";
 
     const inner = document.createElement("div");
     inner.className = "paper-inner";
 
-    // media (small, top-left)
     const media = document.createElement("div");
     media.className = "paper-media";
     if (it.coverAbs) {
@@ -352,7 +307,6 @@ async function buildBlogCards() {
       media.appendChild(img);
     }
 
-    // body
     const bodyDiv = document.createElement("div");
     bodyDiv.className = "paper-body";
 
@@ -366,12 +320,17 @@ async function buildBlogCards() {
 
     const content = document.createElement("div");
     content.className = "paper-rich";
-    content.innerHTML = it.headHtml; // HEAD ONLY
+    content.innerHTML = it.headHtml;
 
-    // right-side badges: external link(s)
     const badges = document.createElement("div");
     badges.className = "paper-badges";
     badges.appendChild(makeBadge(it.ghUrl, "View on GitHub"));
+
+    // stretched link over the whole card to the entry page
+    const link = document.createElement("a");
+    link.href = it.entryUrl;
+    link.className = "stretched-link";
+    link.setAttribute("aria-label", `Open ${it.title}`);
 
     bodyDiv.appendChild(h3);
     bodyDiv.appendChild(dateEl);
@@ -381,6 +340,7 @@ async function buildBlogCards() {
     inner.appendChild(media);
     inner.appendChild(bodyDiv);
     card.appendChild(inner);
+    card.appendChild(link);
     wrap.appendChild(card);
   }
 }
@@ -402,7 +362,6 @@ function initToggle() {
     if (next) {
       pdf.style.display = "none";
       blog.style.display = "";
-      // lazy build the first time
       if (!blog.dataset.built) {
         await buildBlogCards();
         blog.dataset.built = "1";
