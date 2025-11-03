@@ -202,6 +202,16 @@ body {
   color: var(--muted);
   font-size: 0.9rem;
 }
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #111827;
+}
+
 .chev {
   color: var(--muted);
 }
@@ -321,6 +331,7 @@ body {
 .clamp {
   display: -webkit-box;
   -webkit-line-clamp: 5; /* tweak lines to fit your card height */
+  line-clamp: 5;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

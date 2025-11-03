@@ -225,12 +225,11 @@ function makeSnippet(md) {
     .replace(/[*_`>#]/g, "")
     .replace(/\s+/g, " ")
     .trim();
-  // we let CSS clamp lines visually; still cap bytes a bit
   if (text.length > 600) text = text.slice(0, 600).trim() + "…";
   return text || "—";
 }
 
-// CDN url for raw file (good CORS)
+// jsDelivr raw url (CORS-friendly)
 function jsDelivrRaw(owner, repo, path, ref = "main") {
   return `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${ref}/${path}`;
 }
@@ -246,7 +245,7 @@ async function fetchCvCacheJson() {
   }
 }
 
-// load localStorage cache
+// load / save localStorage cache
 function loadLocalCache() {
   try {
     const raw = localStorage.getItem(CV_LOCAL_CACHE_KEY);
@@ -259,21 +258,20 @@ function loadLocalCache() {
     return null;
   }
 }
-
 function saveLocalCache(obj) {
   try {
     localStorage.setItem(CV_LOCAL_CACHE_KEY, JSON.stringify(obj));
   } catch {}
 }
 
+// get fresh list from GitHub API
 async function fetchCvEntriesFromApi() {
   const listUrl = `https://api.github.com/repos/${CV_REPO_OWNER}/${CV_REPO_NAME}/contents/${CV_ENTRIES_DIR}`;
   const r = await fetch(listUrl);
   if (!r.ok) throw new Error(`CV list ${r.status}`);
   const files = await r.json(); // array of {name, path, download_url, ...}
-  // only .md files
   const mdFiles = files.filter((f) => /\.md$/i.test(f.name));
-  // sort newest by date in filename if present or by name desc
+  // newest by date in filename if present
   mdFiles.sort((a, b) => {
     const da = a.name.match(/^(\d{4}-\d{2}-\d{2})/);
     const db = b.name.match(/^(\d{4}-\d{2}-\d{2})/);
@@ -281,7 +279,6 @@ async function fetchCvEntriesFromApi() {
     const tb = db ? new Date(db[1]).getTime() : 0;
     return tb - ta || b.name.localeCompare(a.name);
   });
-  // create light index (path/url only); we fetch content only for latest
   return {
     entries: mdFiles.map((f) => ({
       path: f.path,
@@ -289,6 +286,36 @@ async function fetchCvEntriesFromApi() {
     })),
     updatedAt: Date.now(),
   };
+}
+
+// path utils for cover resolution
+function normSlashes(p) {
+  return String(p).replace(/\\/g, "/");
+}
+function dirnameFromRaw(rawUrl) {
+  // e.g. https://cdn.jsdelivr.net/gh/owner/repo@ref/entries/file.md -> .../entries/
+  return rawUrl.replace(/\/[^/]*$/, "/");
+}
+function repoRootFromRaw(rawUrl) {
+  // https://cdn.jsdelivr.net/gh/owner/repo@ref/entries/file.md -> https://cdn.jsdelivr.net/gh/owner/repo@ref/
+  const m = rawUrl.match(
+    /^(https:\/\/cdn\.jsdelivr\.net\/gh\/[^@]+\/[^@]+@[^/]+)\//i
+  );
+  return m ? m[1] + "/" : dirnameFromRaw(rawUrl);
+}
+function resolveCoverURL(rawMdUrl, cover) {
+  if (!cover) return null;
+  let c = normSlashes(cover).replace(/^\.\//, "");
+  if (/^https?:\/\//i.test(c)) return c;
+
+  const baseDir = dirnameFromRaw(rawMdUrl); // .../entries/
+  const root = repoRootFromRaw(rawMdUrl); // .../@ref/
+
+  // If author put cover at repo root "assets/...", use repo root
+  if (c.startsWith("assets/")) return root + c;
+
+  // Otherwise treat as relative to the entry's folder
+  return baseDir + c;
 }
 
 async function loadLatestCvEntry() {
@@ -322,35 +349,54 @@ async function loadLatestCvEntry() {
     return;
   }
 
-  const latest = idx.entries[0];
-  const rawUrl =
-    latest.url || jsDelivrRaw(CV_REPO_OWNER, CV_REPO_NAME, latest.path);
+  // fetch the first entry that has cv:true in front-matter (try a few to be safe)
+  let chosen = null;
+  for (let i = 0; i < Math.min(idx.entries.length, 10); i++) {
+    const candidate = idx.entries[i];
+    const r = await fetch(candidate.url, { cache: "no-store" });
+    if (!r.ok) continue;
+    const md = await r.text();
+    const { meta, body } = parseFrontMatter(md);
+    const cvFlag = String(meta.cv || "")
+      .trim()
+      .toLowerCase();
+    const include =
+      ["1", "true", "yes", "y", "on"].includes(cvFlag) ||
+      (meta.publish &&
+        String(meta.publish)
+          .toLowerCase()
+          .split(/[,;]/)
+          .map((s) => s.trim())
+          .includes("cv"));
 
-  // fetch the markdown for the latest only
-  const r = await fetch(rawUrl, { cache: "no-store" });
-  if (!r.ok) {
+    if (include) {
+      chosen = { entry: candidate, meta, body, rawUrl: candidate.url };
+      break;
+    }
+  }
+
+  if (!chosen) {
     if (errorEl) {
-      errorEl.textContent = "Failed to load latest CV entry.";
+      errorEl.textContent = "No recent CV entries marked cv: true.";
       errorEl.style.display = "block";
     }
     return;
   }
-  const md = await r.text();
-  const { meta, body } = parseFrontMatter(md);
+
+  const { entry, meta, body, rawUrl } = chosen;
 
   // derive fields
-  const title =
-    meta.title || latest.path.split("/").pop().replace(/\.md$/i, "");
+  const title = meta.title || entry.path.split("/").pop().replace(/\.md$/i, "");
   const dateStr =
-    meta.date || (latest.path.match(/(\d{4}-\d{2}-\d{2})/)?.[1] ?? "");
-  const cover = extractFirstImage(body, meta.cover);
+    meta.date || (entry.path.match(/(\d{4}-\d{2}-\d{2})/)?.[1] ?? "");
+  const coverRel = extractFirstImage(body, meta.cover);
+  const coverAbs = coverRel ? resolveCoverURL(rawUrl, coverRel) : null;
   const snippet = makeSnippet(body);
 
   // populate card
   const linkEl = $("#cv-latest-link");
   if (linkEl) {
-    // point to the raw MD file on GitHub (or use a pretty viewer later)
-    const ghUrl = `https://github.com/${CV_REPO_OWNER}/${CV_REPO_NAME}/blob/main/${latest.path}`;
+    const ghUrl = `https://github.com/${CV_REPO_OWNER}/${CV_REPO_NAME}/blob/main/${entry.path}`;
     linkEl.href = ghUrl;
   }
 
@@ -359,14 +405,12 @@ async function loadLatestCvEntry() {
 
   const cvImg = $("#cv-cover");
   if (cvImg) {
-    if (cover) {
-      // resolve relative cover path against the file directory on jsDelivr
-      const base = rawUrl.replace(/\/[^/]*$/, "/");
-      const absolute = /^https?:\/\//i.test(cover)
-        ? cover
-        : base + cover.replace(/^.\//, "");
-      cvImg.src = absolute;
+    if (coverAbs) {
+      cvImg.src = coverAbs;
       cvImg.style.display = "";
+      cvImg.onerror = () => {
+        cvImg.style.display = "none";
+      };
     } else {
       cvImg.style.display = "none";
     }
@@ -390,6 +434,11 @@ async function loadLatestCvEntry() {
       badgeWrap.appendChild(mkBadge(meta["links.linkedin"], "LinkedIn"));
     if (meta["links.github"])
       badgeWrap.appendChild(mkBadge(meta["links.github"], "GitHub"));
+  }
+
+  if (errorEl) {
+    errorEl.textContent = "";
+    errorEl.style.display = "none";
   }
 }
 
