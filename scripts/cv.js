@@ -363,7 +363,6 @@ async function buildBlogCards() {
     if (!r.ok) continue;
     const md = await r.text();
     const { meta, body } = parseFrontMatter(md);
-    if (!isCvIncluded(meta)) continue;
 
     // Split strictly by markers
     const { headMd, bodyMd } = splitHeadBody(body);
